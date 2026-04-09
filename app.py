@@ -12,7 +12,7 @@ os.system("playwright install chromium")
 st.set_page_config(page_title="Eat-In Turn Time Leaderboards", layout="wide")
 
 # ---------- Config ----------
-THRESHOLDS = {"green": 35, "yellow_hi": 37}  # <35 green, 35–37 yellow, >37 red
+THRESHOLDS = {"green": 40, "yellow_hi": 45}  # <40 green, 41-45 yellow, >46 red
 
 ALIASES = {
     "Opened": ["opened", "open", "order start", "start time", "opened at"],
@@ -113,7 +113,7 @@ def render_image_table(df, title) -> bytes:
 
 # ---------- UI ----------
 st.title("🍽️ Eat-In Turn Time Leaderboards")
-st.caption("Upload one or more POS CSVs. I’ll compute average Eat-In turn time per server, sort fastest → slowest, append a STORE AVERAGE, and color by thresholds (<35 green, 35–37 yellow, >37 red).")
+st.caption("Upload one or more POS CSVs. I’ll compute average Eat-In turn time per server, sort fastest → slowest, append a STORE AVERAGE, and color by thresholds (<40 green, 41-45 yellow, >46 red).")
 
 with st.sidebar:
     st.header("Options")
