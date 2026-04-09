@@ -131,10 +131,11 @@ with tab1:
     with st.form("tray_fetch_form"):
         col1, col2 = st.columns(2)
         with col1:
-            tray_email = st.text_input("Tray Email")
-            tray_store = st.text_input("Store Number", value="Enter Store Number")
+            tray_email = st.text_input("Tray Email", placeholder="name@prpone.com")
+            tray_store = st.text_input("Store Number", placeholder="e.g. 4463")
         with col2:
-            tray_pass = st.text_input("Tray Password", type="password")
+            tray_pass = st.text_input("Tray Password", type="password", placeholder="••••••••")
+            fetch_period = st.radio("Data to Fetch:", options=["Live Today", "Yesterday"], horizontal=True)
             
         submitted = st.form_submit_button("Fetch Live Data", type="primary", use_container_width=True)
         
@@ -145,12 +146,15 @@ with tab1:
             with st.spinner("Logging into Tray and fetching Check data... (This can take 20-30 seconds)"):
                 from tray_api import fetch_tray_report
                 try:
+                    # Map the UI selection exactly to the text Tray expects
+                    tray_period = "Today" if fetch_period == "Live Today" else "Yesterday"
+                
                     # Pass debug_visible=False so it runs headless
                     csv_path = fetch_tray_report(
                         username=tray_email, 
                         password=tray_pass, 
                         store_number=tray_store, 
-                        period="Today", 
+                        period=tray_period, 
                         debug_visible=False
                     )
                     
