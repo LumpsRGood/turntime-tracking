@@ -114,8 +114,8 @@ if __name__ == "__main__":
     # 3. Run: playwright install
     # 4. Run: python tray_scraper.py
     
-    USERNAME = "chad.g@prpone.com"
-    PASSWORD = "IhOp8314638!"
+    USERNAME = "NONE"
+    PASSWORD = "NONE!"
     STORE = "4463"
     PERIOD = "Today" # Or "Yesterday"
     
