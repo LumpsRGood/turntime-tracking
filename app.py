@@ -165,11 +165,14 @@ with tab1:
                         out = compute_leaderboard(df, col_opened, col_closed, col_service, col_server, col_site)
 
                         from datetime import datetime, timedelta
+                        import pytz
+                        
+                        tz = pytz.timezone('US/Central')
                         if fetch_period == "Live Today":
-                            now_str = datetime.now().strftime('%Y-%m-%d %I:%M %p')
-                            title = f"LIVE Eat-In Turn Time – Store {tray_store}\n(As of {now_str})"
+                            now_str = datetime.now(tz).strftime('%Y-%m-%d %I:%M %p')
+                            title = f"LIVE Eat-In Turn Time – Store {tray_store}\n(As of {now_str} CT)"
                         else:
-                            yest_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                            yest_str = (datetime.now(tz) - timedelta(days=1)).strftime('%Y-%m-%d')
                             title = f"Eat-In Turn Time – Store {tray_store}\n({yest_str})"
 
                         img_bytes = render_image_table(out, title)
