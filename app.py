@@ -172,27 +172,27 @@ with tab2:
     uploads = st.file_uploader("Upload one or more CSV files", type=["csv"], accept_multiple_files=True)
 
     if uploads:
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for upl in uploads:
-            try:
-                df = pd.read_csv(upl)
-                col_opened, col_closed, col_service, col_server, col_site = map_required_columns(df)
-                out = compute_leaderboard(df, col_opened, col_closed, col_service, col_server, col_site)
-
-                base = os.path.splitext(upl.name)[0]
-                title = f"Eat-In Turn Time Leaderboard – {base}"
-
-                img_bytes = render_image_table(out, title)
-                st.image(img_bytes, caption=title, use_container_width=True)
-
-                zf.writestr(f"{base}_leaderboard.png", img_bytes)
-
-            except Exception as e:
-                st.error(f"{upl.name}: {e}")
-
-    zip_buf.seek(0)
-    st.download_button("⬇️ Download all images (ZIP)", data=zip_buf,
-                       file_name="leaderboards.zip", mime="application/zip")
-else:
-    st.info("Upload CSV files to generate leaderboards.")
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for upl in uploads:
+                try:
+                    df = pd.read_csv(upl)
+                    col_opened, col_closed, col_service, col_server, col_site = map_required_columns(df)
+                    out = compute_leaderboard(df, col_opened, col_closed, col_service, col_server, col_site)
+    
+                    base = os.path.splitext(upl.name)[0]
+                    title = f"Eat-In Turn Time Leaderboard – {base}"
+    
+                    img_bytes = render_image_table(out, title)
+                    st.image(img_bytes, caption=title, use_container_width=True)
+    
+                    zf.writestr(f"{base}_leaderboard.png", img_bytes)
+    
+                except Exception as e:
+                    st.error(f"{upl.name}: {e}")
+    
+        zip_buf.seek(0)
+        st.download_button("⬇️ Download all images (ZIP)", data=zip_buf,
+                           file_name="leaderboards.zip", mime="application/zip")
+    else:
+        st.info("Upload CSV files to generate leaderboards.")
