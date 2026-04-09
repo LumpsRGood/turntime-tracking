@@ -6,6 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import streamlit as st
 
+# Ensure Playwright browser binaries are installed on the cloud server
+os.system("playwright install chromium")
+
 st.set_page_config(page_title="Eat-In Turn Time Leaderboards", layout="wide")
 
 # ---------- Config ----------
@@ -118,9 +121,57 @@ with st.sidebar:
     y = st.number_input("Yellow upper bound (minutes)", value=float(THRESHOLDS["yellow_hi"]), step=1.0)
     THRESHOLDS["green"], THRESHOLDS["yellow_hi"] = float(g), float(y)
 
-uploads = st.file_uploader("Upload one or more CSV files", type=["csv"], accept_multiple_files=True)
+tab1, tab2 = st.tabs(["Auto-Fetch Live Data", "Manual CSV Upload"])
 
-if uploads:
+with tab1:
+    st.subheader("Tray Automated Fetch")
+    st.write("Pull live data directly from the Tray HQ dashboard. No manual downloads needed.")
+    
+    # We create a form so they can hit Enter to submit
+    with st.form("tray_fetch_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            tray_email = st.text_input("Tray Email")
+            tray_store = st.text_input("Store Number", value="4463")
+        with col2:
+            tray_pass = st.text_input("Tray Password", type="password")
+            
+        submitted = st.form_submit_button("Fetch Live Data", type="primary", use_container_width=True)
+        
+    if submitted:
+        if not tray_email or not tray_pass or not tray_store:
+            st.warning("Please fill out all Tray details.")
+        else:
+            with st.spinner("Logging into Tray and fetching Check data... (This can take 20-30 seconds)"):
+                from tray_api import fetch_tray_report
+                try:
+                    # Pass debug_visible=False so it runs headless
+                    csv_path = fetch_tray_report(
+                        username=tray_email, 
+                        password=tray_pass, 
+                        store_number=tray_store, 
+                        period="Today", 
+                        debug_visible=False
+                    )
+                    
+                    if csv_path and os.path.exists(csv_path):
+                        st.success("Successfully fetched! Computing leaderboard...")
+                        df = pd.read_csv(csv_path)
+                        col_opened, col_closed, col_service, col_server, col_site = map_required_columns(df)
+                        out = compute_leaderboard(df, col_opened, col_closed, col_service, col_server, col_site)
+
+                        title = f"Live Eat-In Turn Time – {tray_store}"
+                        img_bytes = render_image_table(out, title)
+                        st.image(img_bytes, caption=title, use_container_width=True)
+                    else:
+                        st.error("Failed to fetch data from Tray. Please verify credentials or try again later.")
+                except Exception as e:
+                    st.error(f"Error processing the data. {str(e)}")
+
+with tab2:
+    uploads = st.file_uploader("Upload one or more CSV files", type=["csv"], accept_multiple_files=True)
+
+    if uploads:
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for upl in uploads:
