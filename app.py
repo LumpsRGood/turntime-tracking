@@ -165,9 +165,9 @@ with tab1:
                         out = compute_leaderboard(df, col_opened, col_closed, col_service, col_server, col_site)
 
                         from datetime import datetime, timedelta
-                        import pytz
+                        from zoneinfo import ZoneInfo
                         
-                        tz = pytz.timezone('US/Central')
+                        tz = ZoneInfo('US/Central')
                         if fetch_period == "Live Today":
                             now_str = datetime.now(tz).strftime('%Y-%m-%d %I:%M %p')
                             title = f"LIVE Eat-In Turn Time – Store {tray_store}\n(As of {now_str} CT)"
