@@ -167,7 +167,7 @@ with tab1:
                         from datetime import datetime, timedelta
                         from zoneinfo import ZoneInfo
                         
-                        tz = ZoneInfo('US/Central')
+                        tz = ZoneInfo('America/Chicago')
                         if fetch_period == "Live Today":
                             now_str = datetime.now(tz).strftime('%Y-%m-%d %I:%M %p')
                             title = f"LIVE Eat-In Turn Time – Store {tray_store}\n(As of {now_str} CT)"
