@@ -132,7 +132,7 @@ with tab1:
         col1, col2 = st.columns(2)
         with col1:
             tray_email = st.text_input("Tray Email")
-            tray_store = st.text_input("Store Number", value="4463")
+            tray_store = st.text_input("Store Number", value="Enter Store Number")
         with col2:
             tray_pass = st.text_input("Tray Password", type="password")
             
