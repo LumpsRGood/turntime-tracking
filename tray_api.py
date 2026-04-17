@@ -69,8 +69,16 @@ def _configure_checks_report(page, store_number, business_date):
     except Exception:
         _select_visible_text(page, "Period :", "Today")
 
-    _clear_and_fill(page, "input[id*='Start'], input[name*='start'], input[placeholder*='Start']", date_text)
-    _clear_and_fill(page, "input[id*='End'], input[name*='end'], input[placeholder*='End']", date_text)
+    _clear_and_fill(
+        page,
+        "input:visible[id*='Start'], input:visible[name*='start'], input:visible[placeholder*='Start']",
+        date_text,
+    )
+    _clear_and_fill(
+        page,
+        "input:visible[id*='End'], input:visible[name*='end'], input:visible[placeholder*='End']",
+        date_text,
+    )
 
     _select_store(page, store_number)
     _select_visible_text(page, "Tender Type :", "Card")
@@ -81,7 +89,7 @@ def _configure_orders_report(page, store_number, business_date):
     page.wait_for_selector("text='Run Report'", timeout=15000)
 
     date_text = _date_mmddyyyy(business_date)
-    _clear_and_fill(page, "input[id*='Date'], input[name*='date'], input[placeholder*='Date']", date_text)
+    _clear_and_fill(page, "#datepicker", date_text)
 
     _select_store(page, store_number)
     _select_visible_text(page, "Service :", "Eat In")
