@@ -1,6 +1,9 @@
 import io
 import os
 import zipfile
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -146,15 +149,16 @@ with tab1:
             with st.spinner("Logging into Tray and fetching Check data... (This can take 20-30 seconds)"):
                 from tray_api import fetch_tray_report
                 try:
-                    # Map the UI selection exactly to the text Tray expects
-                    tray_period = "Today" if fetch_period == "Live Today" else "Yesterday"
-                
-                    # Pass debug_visible=False so it runs headless
+                    tz = ZoneInfo("America/Chicago")
+                    today = datetime.now(tz).date()
+                    target_date = today if fetch_period == "Live Today" else (today - timedelta(days=1))
+
                     csv_path = fetch_tray_report(
-                        username=tray_email, 
-                        password=tray_pass, 
-                        store_number=tray_store, 
-                        period=tray_period, 
+                        username=tray_email,
+                        password=tray_pass,
+                        store_number=tray_store,
+                        business_date=target_date,
+                        report_type="checks",
                         debug_visible=False
                     )
                     
@@ -163,11 +167,6 @@ with tab1:
                         df = pd.read_csv(csv_path)
                         col_opened, col_closed, col_service, col_server, col_site = map_required_columns(df)
                         out = compute_leaderboard(df, col_opened, col_closed, col_service, col_server, col_site)
-
-                        from datetime import datetime, timedelta
-                        from zoneinfo import ZoneInfo
-                        
-                        tz = ZoneInfo('America/Chicago')
                         if fetch_period == "Live Today":
                             now_str = datetime.now(tz).strftime('%Y-%m-%d %I:%M %p')
                             title = f"LIVE Eat-In Turn Time – Store {tray_store}\n(As of {now_str} CT)"
