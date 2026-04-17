@@ -1,125 +1,158 @@
 import os
-import time
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from pathlib import Path
 
-def fetch_tray_report(username, password, store_number, period="Today", debug_visible=True):
-    """
-    Automates logging into Tray, navigating to the Checks report, and downloading the CSV.
-    period can be "Today" or "Yesterday".
-    Returns the path to the downloaded CSV.
-    """
-    # By default, debug_visible=True runs in headed mode so you can watch it click.
-    # In production on Streamlit, we will set this to False.
+from dotenv import dotenv_values
+from playwright.sync_api import sync_playwright
+
+
+ROOT = Path(__file__).resolve().parent
+DEFAULT_ENV_FILE = ROOT / ".env"
+ORDERS_URL = "https://hq.dine.tray.com/tray/admin/reports?page=ordersListNew"
+CHECKS_URL = "https://hq.dine.tray.com/tray/admin/reports?page=closeTabs"
+
+
+def load_tray_credentials(env_file=DEFAULT_ENV_FILE):
+    cfg = dotenv_values(env_file)
+    username = cfg.get("TRAY_USERNAME")
+    password = cfg.get("TRAY_PASSWORD")
+    if not username or not password:
+        raise ValueError(f"Missing TRAY_USERNAME or TRAY_PASSWORD in {env_file}")
+    return username, password
+
+
+def _date_mmddyyyy(business_date):
+    return business_date.strftime("%m/%d/%Y")
+
+
+def _clear_and_fill(page, selector, value):
+    locator = page.locator(selector).first
+    locator.click()
+    locator.fill("")
+    locator.fill(value)
+
+
+def _select_store(page, store_number):
+    page.click("text=Sites :")
+    page.click("div:has-text('Sites :') + div, button:has-text('Sites'), .sites-dropdown-selector")
+    page.wait_for_timeout(1000)
+
+    try:
+        page.click(f"text=IHOP #{store_number}", timeout=2000)
+    except Exception:
+        search_boxes = page.locator(
+            "input[type='text']:visible:not([id*='Date']):not([name*='date']):not([id*='ate']):not([id*='Check'])"
+        )
+        if search_boxes.count() > 0:
+            search_boxes.first.fill(str(store_number))
+        page.wait_for_timeout(1500)
+        page.click(f"text=IHOP #{store_number}")
+
+    page.keyboard.press("Escape")
+
+
+def _select_visible_text(page, label_text, option_text):
+    page.click(f"text={label_text}")
+    page.click(f"div:has-text('{label_text}') + div, span:has-text('{label_text}') + div")
+    page.wait_for_timeout(800)
+    page.locator(f"text='{option_text}'").filter(visible=True).first.click()
+    page.keyboard.press("Escape")
+
+
+def _configure_checks_report(page, store_number, business_date):
+    page.goto(CHECKS_URL, wait_until="networkidle")
+    page.wait_for_selector("text='Run Report'", timeout=15000)
+
+    date_text = _date_mmddyyyy(business_date)
+
+    try:
+        page.select_option("select[name*='period']", label="Today")
+    except Exception:
+        _select_visible_text(page, "Period :", "Today")
+
+    _clear_and_fill(page, "input[id*='Start'], input[name*='start'], input[placeholder*='Start']", date_text)
+    _clear_and_fill(page, "input[id*='End'], input[name*='end'], input[placeholder*='End']", date_text)
+
+    _select_store(page, store_number)
+    _select_visible_text(page, "Tender Type :", "Card")
+
+
+def _configure_orders_report(page, store_number, business_date):
+    page.goto(ORDERS_URL, wait_until="networkidle")
+    page.wait_for_selector("text='Run Report'", timeout=15000)
+
+    date_text = _date_mmddyyyy(business_date)
+    _clear_and_fill(page, "input[id*='Date'], input[name*='date'], input[placeholder*='Date']", date_text)
+
+    _select_store(page, store_number)
+    _select_visible_text(page, "Service :", "Eat In")
+
+
+def fetch_tray_report(
+    store_number,
+    business_date,
+    report_type,
+    username=None,
+    password=None,
+    debug_visible=False,
+    output_dir=None,
+    env_file=DEFAULT_ENV_FILE,
+):
+    if username is None or password is None:
+        username, password = load_tray_credentials(env_file)
+
+    report_type = report_type.lower().strip()
+    if report_type not in {"checks", "orders"}:
+        raise ValueError("report_type must be 'checks' or 'orders'")
+
+    output_dir = Path(output_dir or os.getcwd())
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=not debug_visible)
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
-        
+
         try:
             print("[1] Navigating to login page...")
             page.goto("https://hq.dine.tray.com", wait_until="networkidle")
-            
+
             print("[2] Logging in...")
-            # We use loose text/placeholder matchers for resilience
             page.fill("input[type='email'], input[placeholder*='Email'], input#username", username)
             page.fill("input[type='password'], input[placeholder*='Password']", password)
-            page.click("button[type='submit'], input[type='submit'], button:has-text('Log In'), button:has-text('Sign In'), button:has-text('Login')")
-            
-            # Wait for dashboard to load
-            print("[3] Waiting for Dashboard...")
-            page.wait_for_selector("text=Logout", timeout=15000)
-            
-            print("[4] Navigating directly to Checks Report via URL...")
-            page.goto("https://hq.dine.tray.com/tray/admin/reports?page=closeTabs", wait_until="networkidle")
-            
-            # Wait for the report page to fully load
-            page.wait_for_selector("text='Run Report'", timeout=10000)
-            
-            print(f"[5] Setting Period to {period}...")
-            # Wait a moment for dynamic dropdowns to initialize
-            page.wait_for_timeout(2000) 
-            
-            # This handles both standard <select> and custom div dropdowns
-            try:
-                page.select_option("select[name*='period']", label=period)
-            except:
-                # If it's a custom dropdown
-                page.click("div:has-text('Period :') + div, span:has-text('Period') + div")
-                page.click(f"text='{period}'")
-            
-            print(f"[6] Selecting Site: {store_number}...")
-            # Click the Sites dropdown wrapper
-            page.click("text=Sites :") # Click the label to focus the area
-            page.click("div:has-text('Sites :') + div, button:has-text('Sites'), .sites-dropdown-selector")
-            page.wait_for_timeout(1000)
-            
-            # The search input is tricky. To avoid typing in 'Start Date', we target the dropdown search specifically
-            # or simply look for an input that isn't for dates or check IDs.
-            try:
-                # Try clicking it if it's already visible in the tree menu
-                page.click(f"text=IHOP #{store_number}", timeout=2000)
-            except:
-                # Otherwise, type it into the visible search box (excluding the date/check id fields)
-                search_boxes = page.locator("input[type='text']:visible:not([id*='Date']):not([name*='date']):not([id*='ate']):not([id*='Check'])")
-                if search_boxes.count() > 0:
-                    search_boxes.first.fill(store_number)
-                page.wait_for_timeout(1500) # Wait for search results
-                page.click(f"text=IHOP #{store_number}")
-                
-            page.keyboard.press("Escape") # Close dropdown
-            
-            print(f"[7] Selecting Tender Type: Card...")
-            page.click("text=Tender Type :")
-            page.click("div:has-text('Tender Type :') + div, span:has-text('Tender Type') + div")
-            page.wait_for_timeout(1000)
-            
-            # 'Card' is usually immediately visible. We use exact match 'Card'
-            # to avoid accidentally targeting the "Gift Card" navigation button.
-            # We filter for visible=True because there's a hidden <option> tag for Card!
-            page.locator("text='Card'").filter(visible=True).click()
-            page.keyboard.press("Escape") # Close dropdown
-            
-            print("[8] Running Report & Waiting for data to load...")
-            page.click("text='Run Report'")
-            
-            # Wait for the CSV link to appear (meaning the table loaded)
+            page.click(
+                "button[type='submit'], input[type='submit'], button:has-text('Log In'), button:has-text('Sign In'), button:has-text('Login')"
+            )
+            page.wait_for_selector("text=Logout", timeout=20000)
+
+            print(f"[3] Configuring {report_type} report...")
+            if report_type == "checks":
+                _configure_checks_report(page, store_number, business_date)
+            else:
+                _configure_orders_report(page, store_number, business_date)
+
+            print("[4] Running report and downloading CSV...")
             with page.expect_download(timeout=60000) as download_info:
-                # Based on the screenshot, it's just the word CSV next to a little icon
+                page.click("text='Run Report'")
                 page.locator("text=CSV").filter(visible=True).first.click()
-            
+
             download = download_info.value
-            
-            # Save it temporarily to the current folder
-            file_name = f"Tray_Checks_Report_{store_number}_{period}.csv"
-            save_path = os.path.join(os.getcwd(), file_name)
-            download.save_as(save_path)
-            
+            date_part = business_date.strftime("%Y%m%d")
+            filename = f"tray_{report_type}_{store_number}_{date_part}.csv"
+            save_path = output_dir / filename
+            download.save_as(str(save_path))
             print(f"[SUCCESS] Downloaded report to: {save_path}")
             return save_path
 
         except Exception as e:
-            print(f"[ERROR] Script failed: {e}")
-            # Take a screenshot if it fails so we can see what selector it got stuck on
-            error_img = "debug_tray_error.png"
-            page.screenshot(path=error_img)
-            print(f"Saved {error_img} so we can diagnose the UI.")
-            return None
+            error_img = output_dir / f"debug_{report_type}_{store_number}.png"
+            page.screenshot(path=str(error_img))
+            raise RuntimeError(f"Tray {report_type} fetch failed for store {store_number}: {e}") from e
         finally:
             browser.close()
 
+
 if __name__ == "__main__":
-    # --- Instructions to test locally ---
-    # 1. Update your email and password below
-    # 2. Run: pip install playwright
-    # 3. Run: playwright install
-    # 4. Run: python tray_scraper.py
-    
-    USERNAME = "NONE"
-    PASSWORD = "NONE!"
-    STORE = "4463"
-    PERIOD = "Today" # Or "Yesterday"
-    
-    if USERNAME == "your_email@prpone.com":
-        print("Please update the USERNAME and PASSWORD at the bottom of the script before running!")
-    else:
-        fetch_tray_report(USERNAME, PASSWORD, STORE, period=PERIOD, debug_visible=True)
+    from datetime import date, timedelta
+
+    target_date = date.today() - timedelta(days=1)
+    print(fetch_tray_report(store_number="4463", business_date=target_date, report_type="checks", debug_visible=True))
