@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from dotenv import dotenv_values
@@ -29,6 +30,55 @@ def _clear_and_fill(page, selector, value):
     locator.click()
     locator.fill("")
     locator.fill(value)
+
+
+def _is_visible(page, selector):
+    try:
+        return page.locator(selector).first.is_visible(timeout=500)
+    except Exception:
+        return False
+
+
+def _wait_for_authenticated_session(page, timeout=45000):
+    deadline = time.time() + (timeout / 1000)
+    login_selectors = [
+        "input[type='email']",
+        "input[placeholder*='Email']",
+        "input#username",
+        "input[type='password']",
+        "input[placeholder*='Password']",
+    ]
+    success_selectors = [
+        "text=Logout",
+        "button:has-text('Logout')",
+        "a[href*='/tray/admin/reports']",
+        "text=Reports",
+    ]
+    error_selectors = [
+        "text=Invalid",
+        "text=incorrect",
+        "text=unable to sign in",
+        "text=problem signing",
+    ]
+
+    while time.time() < deadline:
+        current_url = (page.url or "").lower()
+
+        if any(_is_visible(page, selector) for selector in success_selectors):
+            return
+
+        if any(_is_visible(page, selector) for selector in error_selectors):
+            raise RuntimeError("Tray login was rejected. Please verify the email and password.")
+
+        if "/tray/admin/" in current_url or "/tray/" in current_url and "login" not in current_url:
+            return
+
+        if not any(_is_visible(page, selector) for selector in login_selectors):
+            return
+
+        page.wait_for_timeout(1000)
+
+    raise RuntimeError("Timed out waiting for Tray to finish logging in.")
 
 
 def _select_store(page, store_number):
@@ -130,7 +180,7 @@ def fetch_tray_report(
             page.click(
                 "button[type='submit'], input[type='submit'], button:has-text('Log In'), button:has-text('Sign In'), button:has-text('Login')"
             )
-            page.wait_for_selector("text=Logout", timeout=20000)
+            _wait_for_authenticated_session(page)
 
             print(f"[3] Configuring {report_type} report...")
             if report_type == "checks":
